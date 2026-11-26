@@ -21,8 +21,12 @@ export class OpenAIProvider implements AIProvider {
         type: "function" as const,
         function: { name: t.name, description: t.description, parameters: t.parameters },
       })),
+      response_format: req.jsonSchema
+        ? { type: "json_schema", json_schema: { name: req.jsonSchema.name, strict: true, schema: req.jsonSchema.schema } }
+        : undefined,
       max_completion_tokens: req.maxOutputTokens,
-      reasoning_effort: "low",
+      reasoning_effort: req.reasoningEffort ?? ((process.env.OPENAI_REASONING_EFFORT as "medium") || "medium"),
+      prompt_cache_key: "mel-atendente",
     });
     const choice = res.choices[0];
     const toolCalls = (choice?.message.tool_calls ?? [])
@@ -30,6 +34,7 @@ export class OpenAIProvider implements AIProvider {
       .map((c) => ({ id: c.id, name: c.function.name, arguments: c.function.arguments }));
     return {
       text: choice?.message.content ?? "",
+      refusal: choice?.message.refusal ?? null,
       toolCalls,
       model: res.model || this.model,
       usage: {

@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, LogOut, MessagesSquare } from "lucide-react";
+import { BarChart3, LogOut, MessagesSquare, SlidersHorizontal } from "lucide-react";
 import clsx from "clsx";
 
 const LINKS = [
   { href: "/conversas", label: "Conversas", icon: MessagesSquare },
+  { href: "/comportamento", label: "Ajustes", icon: SlidersHorizontal },
   { href: "/consumo", label: "Consumo", icon: BarChart3 },
 ];
 

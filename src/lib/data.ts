@@ -38,14 +38,16 @@ export async function getConversationDetail(id: string) {
     .innerJoin(schema.contacts, eq(schema.contacts.id, schema.conversations.contactId))
     .where(eq(schema.conversations.id, id));
   if (!row) return null;
-  const [msgs, requests] = await Promise.all([
+  const [msgs, requests, events, feedback] = await Promise.all([
     db.select().from(schema.messages).where(eq(schema.messages.conversationId, id)).orderBy(asc(schema.messages.createdAt)),
     db.select().from(schema.appointmentRequests).where(eq(schema.appointmentRequests.conversationId, id)).orderBy(desc(schema.appointmentRequests.createdAt)),
+    db.select().from(schema.crmEvents).where(eq(schema.crmEvents.contactId, row.contact.id)).orderBy(desc(schema.crmEvents.createdAt)),
+    db.select({ messageId: schema.responseFeedback.messageId }).from(schema.responseFeedback).where(eq(schema.responseFeedback.conversationId, id)),
   ]);
   const [cost] = await db
     .select({ total: dsql<string>`coalesce(sum(${schema.aiUsage.costUsd}),0)` })
     .from(schema.aiUsage)
     .where(eq(schema.aiUsage.conversationId, id));
-  return { ...row, messages: msgs, requests, costUsd: Number(cost?.total ?? 0) };
+  return { ...row, messages: msgs, requests, events, ratedMessageIds: feedback.map((f) => f.messageId), costUsd: Number(cost?.total ?? 0) };
 }
 export type ConversationDetail = NonNullable<Awaited<ReturnType<typeof getConversationDetail>>>;

@@ -92,6 +92,17 @@ async function flow(label, contextOptions) {
   await page.screenshot({ path: `${SHOTS}/${label}-2-conversa.png` });
   if (await page.getByLabel("Fechar").isVisible()) await page.getByLabel("Fechar").click();
 
+  await step("análise interna aparece sob a resposta", async () => {
+    await page.getByRole("log").getByRole("button", { name: "análise" }).first().click();
+    await page.getByRole("log").getByText("Decisão:").first().waitFor();
+  });
+  await step("avaliar resposta com motivo e resposta melhor", async () => {
+    await page.getByRole("log").getByRole("button", { name: "avaliar" }).first().click();
+    await page.fill("#fb-reason", "Apresentação longa demais");
+    await page.fill("#fb-better", "Oi! Sou a assistente virtual da Dra. Mel. Como posso ajudar?");
+    await page.getByRole("button", { name: "Salvar correção" }).click();
+    await page.getByRole("log").getByText("avaliada").first().waitFor();
+  });
   await step("equipe responde e a IA é desativada", async () => {
     await page.getByRole("radio", { name: "Equipe" }).click();
     await page.getByLabel("Mensagem").fill("Oi Juliana, aqui é a Carla da recepção!");
@@ -111,6 +122,25 @@ async function flow(label, contextOptions) {
     await page.getByRole("log").getByText("IA reativada pela equipe.").waitFor();
   });
   await page.screenshot({ path: `${SHOTS}/${label}-3-equipe.png` });
+
+  await step("ajustes: editar instrução e salvar versão", async () => {
+    await page.goto(`${BASE}/comportamento`);
+    await page.getByRole("button", { name: "Instruções específicas" }).click();
+    await page.fill("#section-text", `Teste ${label}: responder de forma breve.`);
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    await page.getByText("Salvo. Vale a partir da próxima resposta.").waitFor();
+    await page.getByRole("button", { name: "Versões anteriores" }).click();
+    await page.getByText("versão atual").waitFor();
+  });
+  await step("ajustes: correção vira exemplo", async () => {
+    await page.getByRole("tab", { name: /Correções/ }).click();
+    await page.getByText("Apresentação longa demais").first().waitFor();
+    await page.getByRole("button", { name: "Adicionar aos exemplos" }).first().click();
+    await page.getByText("usada").first().waitFor();
+    await page.getByRole("tab", { name: "Regras protegidas" }).click();
+    await page.getByText("Transparência").waitFor();
+  });
+  await page.screenshot({ path: `${SHOTS}/${label}-5-ajustes.png`, fullPage: true });
 
   await step("tela de consumo mostra gastos e salva limites", async () => {
     await page.goto(`${BASE}/consumo`);

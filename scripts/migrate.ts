@@ -9,7 +9,7 @@ async function main() {
     console.log("[migrate] DATABASE_URL ausente; pulando migrações.");
     return;
   }
-  const sql = postgres(url, { max: 1, prepare: false });
+  const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
   await migrate(drizzle(sql), { migrationsFolder: "./drizzle" });
   await sql`insert into settings (id) values (1) on conflict (id) do nothing`;
   await sql.end();

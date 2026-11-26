@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, Bot, CalendarClock, Info, SendHorizontal, UserRound, X } from "lucide-react";
+import { ArrowLeft, Bot, Brain, CalendarClock, Flag, Info, SendHorizontal, UserRound, X } from "lucide-react";
 import clsx from "clsx";
 import type { ConversationDetail } from "@/lib/data";
 import { EVIDENCE_LABEL, formatDateTime, formatTime, initials, ORIGIN_LABEL, usd } from "@/lib/format";
@@ -20,6 +20,7 @@ export function ChatView({ initial }: { initial: ConversationDetail }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [rating, setRating] = useState<Msg | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
 
@@ -48,6 +49,7 @@ export function ChatView({ initial }: { initial: ConversationDetail }) {
       conversationId: conversation.id,
       sender: mode,
       content,
+      meta: null,
       createdAt: new Date(),
     });
     try {
@@ -157,7 +159,13 @@ export function ChatView({ initial }: { initial: ConversationDetail }) {
               </div>
             )}
             {messages.map((m) => (
-              <Bubble key={m.id} m={m} pending={m.id === "pending"} />
+              <Bubble
+                key={m.id}
+                m={m}
+                pending={m.id === "pending"}
+                rated={detail.ratedMessageIds.includes(m.id)}
+                onRate={() => setRating(m)}
+              />
             ))}
             {aiThinking && (
               <div className="flex justify-end">
@@ -240,6 +248,16 @@ export function ChatView({ initial }: { initial: ConversationDetail }) {
       <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-zinc-200 bg-white xl:block">
         <Details detail={detail} onStatus={setRequestStatus} />
       </aside>
+      {rating && (
+        <FeedbackDialog
+          message={rating}
+          onClose={() => setRating(null)}
+          onSaved={() => {
+            setDetail((d) => ({ ...d, ratedMessageIds: [...d.ratedMessageIds, rating.id] }));
+            setRating(null);
+          }}
+        />
+      )}
       {showInfo && (
         <div className="fixed inset-0 z-40 xl:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-zinc-900/30" onClick={() => setShowInfo(false)} />
@@ -257,17 +275,68 @@ export function ChatView({ initial }: { initial: ConversationDetail }) {
   );
 }
 
-function Bubble({ m, pending }: { m: Msg; pending: boolean }) {
+const MOMENTO: Record<string, string> = {
+  abertura: "abertura",
+  entendendo_necessidade: "entendendo a necessidade",
+  duvida_informacao: "dúvida / informação",
+  objecao: "objeção",
+  decidindo: "decidindo",
+  agendando: "agendando",
+  encerramento: "encerrando",
+  pos_agendamento: "pós-agendamento",
+  fora_do_escopo: "fora do escopo",
+};
+
+function Analysis({ meta }: { meta: NonNullable<Msg["meta"]> }) {
+  const a = (meta.analise ?? {}) as Record<string, string | boolean | null>;
+  return (
+    <div className="mt-2 space-y-1 rounded-lg bg-white/70 p-2 text-[12px] leading-snug text-zinc-600 ring-1 ring-teal-100">
+      <p>
+        <b className="font-medium text-zinc-700">Intenção:</b> {String(a.intencao ?? "")}
+      </p>
+      <p>
+        <b className="font-medium text-zinc-700">Momento:</b> {MOMENTO[String(a.momento)] ?? String(a.momento)} · <b className="font-medium text-zinc-700">Perfil:</b>{" "}
+        {String(a.perfil ?? "").replaceAll("_", " ")} · <b className="font-medium text-zinc-700">Urgência:</b> {String(a.urgencia)}
+      </p>
+      {a.objecao_ou_duvida && (
+        <p>
+          <b className="font-medium text-zinc-700">Dúvida/objeção:</b> {String(a.objecao_ou_duvida)}
+        </p>
+      )}
+      <p>
+        <b className="font-medium text-zinc-700">Decisão:</b> {String(a.proxima_intervencao ?? "")}
+      </p>
+      {meta.acoes && meta.acoes.length > 0 && (
+        <p>
+          <b className="font-medium text-zinc-700">Registrado no CRM:</b> {meta.acoes.join(" · ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Bubble({ m, pending, rated, onRate }: { m: Msg; pending: boolean; rated: boolean; onRate: () => void }) {
+  const [open, setOpen] = useState(false);
   if (m.sender === "sistema") {
     return (
-      <div className="my-1.5 flex justify-center">
+      <div className="my-1.5 flex flex-col items-center">
         <span className="max-w-[90%] rounded-lg bg-white/90 px-3 py-1 text-center text-xs text-zinc-500 shadow-sm">{m.content}</span>
+        {m.meta?.analise && (
+          <button onClick={() => setOpen((o) => !o)} className="mt-1 text-[11px] text-teal-700">
+            {open ? "ocultar análise" : "ver análise"}
+          </button>
+        )}
+        {open && m.meta && (
+          <div className="max-w-[85%]">
+            <Analysis meta={m.meta} />
+          </div>
+        )}
       </div>
     );
   }
   const fromClinic = m.sender !== "paciente";
   return (
-    <div className={clsx("flex", fromClinic ? "justify-end" : "justify-start")}>
+    <div className={clsx("flex flex-col", fromClinic ? "items-end" : "items-start")}>
       <div
         className={clsx(
           "max-w-[85%] rounded-2xl px-3.5 py-2 shadow-sm md:max-w-[70%]",
@@ -284,8 +353,97 @@ function Bubble({ m, pending }: { m: Msg; pending: boolean }) {
         )}
         <p className="whitespace-pre-wrap break-words text-[15px] leading-snug">{m.content}</p>
         <div className="mt-0.5 text-right text-[10px] text-zinc-400">{pending ? "enviando…" : formatTime(m.createdAt)}</div>
+        {open && m.meta && <Analysis meta={m.meta} />}
       </div>
+      {m.sender === "ia" && !pending && (
+        <div className="mt-0.5 flex gap-3 pr-1 text-[11px]">
+          {m.meta?.analise && (
+            <button onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-1 text-zinc-400 hover:text-teal-700">
+              <Brain className="h-3 w-3" /> {open ? "ocultar análise" : "análise"}
+            </button>
+          )}
+          {rated ? (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <Flag className="h-3 w-3" /> avaliada
+            </span>
+          ) : (
+            <button onClick={onRate} className="inline-flex items-center gap-1 text-zinc-400 hover:text-amber-700">
+              <Flag className="h-3 w-3" /> avaliar
+            </button>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+function FeedbackDialog({ message, onClose, onSaved }: { message: Msg; onClose: () => void; onSaved: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [reason, setReason] = useState("");
+  const [better, setBetter] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messageId: message.id, reason, betterResponse: better || undefined }),
+    });
+    setSaving(false);
+    if (res.ok) onSaved();
+    else setError((await res.json().catch(() => ({}))).error ?? "Não foi possível salvar.");
+  }
+
+  return (
+    <dialog ref={ref} onClose={onClose} className="m-auto w-[min(94vw,520px)] rounded-2xl p-0 shadow-xl backdrop:bg-zinc-900/30">
+      <form onSubmit={save} className="p-6">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Avaliar resposta</h2>
+            <p className="text-sm text-zinc-500">Vira uma correção em Ajustes. Nada muda automaticamente.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full p-1 text-zinc-400 hover:bg-zinc-100" aria-label="Fechar">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mb-4 rounded-xl bg-teal-50 p-3 text-sm ring-1 ring-teal-100">{message.content}</p>
+        <label htmlFor="fb-reason" className="mb-1 block text-sm font-medium text-zinc-700">
+          O que não ficou bom?
+        </label>
+        <textarea
+          id="fb-reason"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+          maxLength={2000}
+          required
+          placeholder="Ex.: falou de preço antes de entender o que a paciente queria."
+          className="mb-4 w-full rounded-xl border border-zinc-300 p-3 text-base outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10"
+        />
+        <label htmlFor="fb-better" className="mb-1 block text-sm font-medium text-zinc-700">
+          Como seria uma resposta melhor? <span className="font-normal text-zinc-400">(opcional)</span>
+        </label>
+        <textarea
+          id="fb-better"
+          value={better}
+          onChange={(e) => setBetter(e.target.value)}
+          rows={3}
+          maxLength={2000}
+          className="w-full rounded-xl border border-zinc-300 p-3 text-base outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10"
+        />
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        <button type="submit" disabled={saving || reason.trim().length < 3} className="mt-5 w-full rounded-xl bg-teal-700 py-2.5 font-medium text-white hover:bg-teal-800 disabled:opacity-40">
+          {saving ? "Salvando…" : "Salvar correção"}
+        </button>
+      </form>
+    </dialog>
   );
 }
 
@@ -362,6 +520,28 @@ function Details({
           </ul>
         )}
       </section>
+
+      <section>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">O que já sabemos</h3>
+        <p className="text-sm text-zinc-700">{contact.summary ?? "Nada registrado ainda."}</p>
+      </section>
+
+      {detail.events.length > 0 && (
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Objeções e oportunidades</h3>
+          <ul className="space-y-2 text-sm">
+            {detail.events.map((e) => (
+              <li key={e.id} className="rounded-lg bg-zinc-50 p-2">
+                <span className={clsx("mr-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium", e.type === "objecao" ? "bg-amber-100 text-amber-800" : "bg-teal-100 text-teal-800")}>
+                  {e.type === "objecao" ? `Objeção${e.category ? `: ${e.category.replaceAll("_", " ")}` : ""}` : "Oportunidade"}
+                </span>
+                {e.description}
+                {e.when && <span className="text-zinc-500"> · {e.when}</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Custo de IA nesta conversa</h3>

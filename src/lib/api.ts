@@ -19,7 +19,8 @@ export function sameOrigin(req: Request): boolean {
 
 export async function parseBody<T extends z.ZodType>(req: Request, schema: T): Promise<z.infer<T> | null> {
   try {
-    const r = schema.safeParse(await req.json());
+    const raw = JSON.parse((await req.text()).replace(/\\u0000/g, ""));
+    const r = schema.safeParse(raw);
     return r.success ? r.data : null;
   } catch {
     return null;

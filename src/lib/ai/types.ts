@@ -30,11 +30,15 @@ export interface Usage {
 export interface ChatRequest {
   messages: ChatMessage[];
   tools?: ToolDefinition[];
+  /** Saída estruturada (JSON Schema estrito). */
+  jsonSchema?: { name: string; schema: Record<string, unknown> };
   maxOutputTokens: number;
+  reasoningEffort?: "minimal" | "low" | "medium" | "high";
 }
 
 export interface ChatResponse {
   text: string;
+  refusal?: string | null;
   toolCalls: ToolCall[];
   usage: Usage;
   model: string;

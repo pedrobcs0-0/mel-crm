@@ -24,15 +24,22 @@ Next.js 15 (App Router) + TypeScript + Tailwind 4 · PostgreSQL via Drizzle ORM 
 ## Estrutura
 - `src/db/schema.ts` — tabelas; migrações em `drizzle/` (`npm run db:generate` depois de mudar o schema).
 - `src/lib/ai/` — provedores (`openai.ts`, `mock.ts` só para testes), `pricing.ts` (preços por modelo).
-- `src/lib/attendant/` — prompt, ferramentas (solicitar_agendamento, registrar_contato, transferir_para_humano) e `engine.ts` (turno da IA, trava, orçamento).
+- `src/lib/attendant/` — comportamento da atendente:
+  - `behavior/protected.ts` — regras críticas PROTEGIDAS (só mudam por código) + contrato de saída.
+  - `behavior/defaults.ts` — seções EDITÁVEIS (personalidade, comunicação, estratégia, consultório, diferenciais, valores, procedimentos, objeções, exemplos, instruções). A versão em uso fica em `prompt_sections` (com histórico em `prompt_section_versions`).
+  - `response.ts` — JSON Schema da resposta: `analise` (interna) + `mensagens` (0–2) + `acoes` (contato, memória, agendamento, objeção, oportunidade, pendência, transferir). Uma única chamada ao modelo por turno.
+  - `prompt.ts` — monta prompt estático (cacheável) + contexto dinâmico do contato no fim.
+  - `engine.ts` — turno da IA: trava, orçamento, chamada, aplica ações, dedup de eventos.
+  - `improve.ts` — gera PROPOSTAS de melhoria a partir das correções do laboratório (nunca aplica sozinho).
 - `src/lib/usage/` — orçamento e relatório.
 - `src/app/(app)/` — telas autenticadas; `src/middleware.ts` protege tudo com senha (`APP_PASSWORD`).
-- `src/lib/clinic/knowledge.ts` — base FICTÍCIA (vai virar base editável).
+- Dados do consultório são FICTÍCIOS (seções consultorio/valores/diferenciais) até validação da Mel.
 
 ## Comandos
 - `npm run dev` · `npm run build` (roda migrações se houver `DATABASE_URL`) · `npm run lint` · `npm run typecheck`
 - `npm test` — unitários + integração (precisa de `DATABASE_URL` apontando para um banco **mel_test**).
 - `npm run test:e2e` — navegador desktop+celular com IA simulada (rodar `AI_PROVIDER=mock ALLOW_MOCK_AI=1 npm run build` antes; usar banco descartável).
+- `npx tsx scripts/simulate.ts <saida.md> [ids]` — bateria de 13 conversas completas com a IA REAL e paciente simulado (custa ~US$ 0,25 por rodada; usar banco descartável, ex. `mel_sim`). Ler o relatório antes de mexer no comportamento.
 - Postgres local na nuvem: `/usr/lib/postgresql/16/bin` (initdb/pg_ctl como usuário postgres, socket em /tmp).
 
 ## Qualidade
